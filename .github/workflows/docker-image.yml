@@ -17,15 +17,15 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag robkaandorp/rbd:${{ vars.VERSION_TAG }} --tag robkaandorp/rbd:${{ env.RELEASE_VERSION }}
+      run: docker build . --file Dockerfile --tag ajanis/rbd:${{ vars.VERSION_TAG }} --tag ajanis/rbd:${{ env.RELEASE_VERSION }}
     - name: Export image
       run: |
-        id=$(docker create robkaandorp/rbd:${{ vars.VERSION_TAG }} true)
+        id=$(docker create ajanis/rbd:${{ vars.VERSION_TAG }} true)
         mkdir -p plugin/rootfs
         cp config.json plugin/
         docker export "$id" | sudo tar -x -C plugin/rootfs
         docker rm -vf "$id"
-        docker rmi robkaandorp/rbd:${{ vars.VERSION_TAG }}
+        docker rmi ajanis/rbd:${{ vars.VERSION_TAG }}
     - name: Create tar archive
       run: sudo tar -czf docker-volume-rbd-${{ env.RELEASE_VERSION }}.tgz plugin/
     - name: GitHub release

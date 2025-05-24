@@ -1,6 +1,6 @@
 {
 	"description": "Ceph rbd plugin for Docker",
-	"documentation": "https://github.com/robkaandorp/docker-volume-rbd",
+	"documentation": "https://github.com/ajanis/docker-volume-rbd",
     "entrypoint": ["/app/entrypoint.sh"],
     "env": [
         {
