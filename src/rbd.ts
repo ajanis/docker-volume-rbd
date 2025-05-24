@@ -90,9 +90,10 @@ export default class Rbd {
         }
     }
 
-    async makeFilesystem(fstype: string, device: string) {
+    async makeFilesystem(fstype: string, device: string, mkfs_options: string ) {
         try {
-            const { stdout, stderr } = await execFile("mkfs", ["-t", fstype, device], { timeout: 120000 });
+            const extraArgs = mkfs_options? ["fs-options", ...mkfs_options.split(' ')] : []
+            const { stdout, stderr } = await execFile("mkfs", ["-t", fstype, ...extraArgs, device], { timeout: 120000 });
             if (stderr) console.error(stderr);
             if (stdout) console.log(stdout);
         }

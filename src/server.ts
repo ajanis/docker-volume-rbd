@@ -36,16 +36,17 @@ function getMountPoint(name: string): string {
     called). Opts is a map of driver specific options passed through from the user request.
 */
 app.post("/VolumeDriver.Create", async (request, response) => {
-    const req = request.body as { Name: string, Opts: { size: string, fstype: string } };
+    const req = request.body as { Name: string, Opts: { size: string, fstype: string, mkfs_options: string } };
     const fstype = req.Opts?.fstype || "xfs";
     const size = req.Opts?.size || "200M";
+    const mkfs_options = req.Opts?.mkfs_options || "";
 
     console.log(`Creating rbd volume ${req.Name}`);
 
     try {
         await rbd.create(req.Name, size);
         let device = await rbd.map(req.Name);
-        await rbd.makeFilesystem(fstype, device);
+        await rbd.makeFilesystem(fstype, device, mkfs_options);
         await rbd.unMap(req.Name);
     }
     catch (error) {
@@ -56,6 +57,7 @@ app.post("/VolumeDriver.Create", async (request, response) => {
         Err: ""
     });
 });
+
 
 /*
     Delete the specified volume from disk. This request is issued when a user invokes 
