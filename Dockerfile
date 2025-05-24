@@ -18,7 +18,7 @@ RUN pnpm run build
 RUN pnpm prune --prod
 
 FROM base
-LABEL maintainer="Rob Kaandorp <rob@di.nl>"
+LABEL maintainer="Alan Janis <alan.janis@alantotally.rocks>"
 COPY --from=builder /app /app
 WORKDIR /app
 RUN mkdir -p /run/docker/plugins /mnt/state /mnt/volumes /etc/ceph
