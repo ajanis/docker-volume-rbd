@@ -14,7 +14,7 @@ This plugin uses the ubuntu lts image with a simple script as docker volume plug
 - Generate a minimal ceph.conf file by running the following command on a Ceph admin or manager node.
 - Copy the resulting file to `/etc/ceph/ceph.conf` on all Docker nodes
 
-  ```shell
+  ```bash
   ceph config generate-minimal-conf -o ceph.conf
   ```
 ### Ceph Client Keyring
@@ -24,7 +24,7 @@ This plugin uses the ubuntu lts image with a simple script as docker volume plug
 
   - For the `admin` user (plugin default), run the following command on a Ceph admin node
 
-    ```shell
+    ```bash
     ceph auth print-key client.admin -o ceph.client.admin.keyring
     ```
 
@@ -32,7 +32,7 @@ This plugin uses the ubuntu lts image with a simple script as docker volume plug
 
   - To create a new user (ex: `docker`), run the following command on a Ceph admin node 
 
-    ```shell
+    ```bash
     ceph auth get-or-create client.docker mon 'profile rbd' osd 'profile rbd pool=rbd' -o ceph.client.docker.keyring
     ```
 
@@ -63,13 +63,17 @@ All available options are:
 
 (_do not do this on a production system!_)
 
-- Build with or use the [`build.sh`](./build.sh) build script (_do not do this on a production system!_):
+- Build with the following commands or use the [`build.sh`](./build.sh) build script (_do not do this on a production system!_):
 
-  ```
+  ```bash
   % git clone https://github.com/ajanis/docker-volume-rbd.git
   
   % cd docker-volume-rbd
+  
+  # Build Script
+  % ./build.sh
 
+  # Manually
   % docker build . -t ajanis/rbd:v19.2
 
   % id=$(docker create ajanis/rbd:v19.2 true)
@@ -83,31 +87,66 @@ All available options are:
 
   % docker plugin enable ajanis/rbd:v19.2
   ```
+
 ### Post-Install Configuration
 
 If you install with the build script or if you need to change the default volume options after install, then you can configure them using `docker plugin set`
 
-```shell
-docker plugin set ajanis/rbd:v19.2 RBD_CONF_POOL="rbd.custom" RBD_CONF_KEYRING_USER="customuser"
+```bash
+docker plugin set ajanis/rbd:v19.2 RBD_CONF_POOL="rbd.swarm" RBD_CONF_KEYRING_USER="swarm" RBD_CONF_CLUSTER="ceph" RBD_CONF_MAP_OPTIONS='--exclusive;w--options=noshare'
 ```
 
 
 ## Volume Creation
 
-In addition to the `size` (_Default: 200M_) and `fstype` (_Default: XFS_) options, the volume filesystem can be customized by passing options to mkfs with `mkfs_options` (_No Default_).
+In addition to the **Optional** `size` (_Default: 200M_) and `fstype` (_Default: XFS_) options, the volume filesystem can be customized by passing options to mkfs with `mkfs_options` (_No Default_).
 
-Filesystem osptions **MUST** be supported by the underlying filesystem utility, e.g.: `mkfs.ext4`, `mkfs.xfs` but should be passed as a string of options as if using the generic `mkfs` command (following `fs-options` arg)
+Filesystem osptions **MUST** be supported by the underlying filesystem utility, e.g.: `mkfs.ext4`, `mkfs.xfs` but should be passed as a string of options as if using the generic `mkfs` command's `fs-options` argument:
 
-Example: `mkfs -t <fstype> <size> fs-options [custom mkfs options]`
+*mkfs -t [fstype] [size] fs-options* **[custom mkfs options]**
 
 
 ### Docker Command-Line
-```shell
-% docker volume create -d ajanis/rbd:v19.2 -o size=150M -o fstype=xfs -o mkfs_option='m
+```bash
+# xfs
+% docker volume create -d ajanis/rbd:v19.2 -o fstype=xfs -o size=1G -o mkfs_options='-f -i size=2048 -b size=4096' xfs-vol
+
+# ext4
+% docker volume create -d ajanis/rbd:v19.2 -o size=1G -o fstype=ext4 -o mkfs_options='-b 4096 -E stride=16 stripe-width=128' ext4-vol
 ```
 
-size and fstype are optional and default to 200M and xfs respectively.
+### Docker Compose
 
-In my development setup (hyper-v virtualized ceph and docker nodes), the xfs filesystem gives me better write performance over ext4, read performance is about the same.
+```yaml
+volumes:
+  ceph-rbd-xfs-volume:
+    name: ceph-rbd-xfs-volume
+    driver: ajanis/rbd:v19.2
+    driver_opts:
+      fstfype: xfs
+      size: 10G
+      mkfs_options: "-f -i size=2048 -b size=4096"
+  ceph-rbd-ext4-volume:
+    name: ceph-rbd-ext4-volume
+    driver: ajanis/rbd:v19.2
+    driver_opts:
+      fstfype: ext4
+      size: 10G
+      mkfs_options: "-b 4096 -E stride=16 stripe-width=128"
+services:
+  service1:
+    ...
+    volumes:
+      - type: volume
+        source: ceph-rbd-xfs-volume
+        target: /ceph-rbd-xfs-volume
+      - type: volume
+        source: ceph-rbd-ext4-volume
+        target: /ceph-rbd-ext4-volume
+```
+## Warnings
 
-**WARNING**: do _NOT_ mount a volume on multiple hosts at the same time to prevent filesystem corruption! If you need to share a filesysem between hosts use CephFS or Cifs.
+- Do **NOT** mount an rbd-backed filesystem to multiple hosts/containers at the same time.  If you require shared file storage for multiple containers (each with read/write access), use CephFS.
+  - Mount a CephFS volume to all of your Docker/Swarm nodes.
+  - Create a directory as needed
+  - Use a Docker volume `bind` mount to any container needing access.  Ex: `-v /path/to/cephfs/docker:/docker`
