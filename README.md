@@ -58,6 +58,12 @@ All available options are:
 - `RBD_CONF_MAP_OPTIONS`
   - default: `--exclusive`: ensures that only one instance can mount the rbd at a time to prevent corruption)
   - Provide a semicolon separated list to provide multiple options directly to the `rbd map` command. eg `RBD_CONF_MAP_OPTIONS="--exclusive;--read-only;--options noshare,lock_on_read"`
+- `RBD_CONF_RBD_OPTIONS`
+  - default: `"layering,exclusive-lock,object-map,fast-diff,deep-flatten"`
+  - Provide a comma separated list of all options passed to the `rbd map --image-feature` argument.
+- `RBD_CONF_ORDER`
+  - default: `"22"`
+  - Block size defined as `2`<sup>`RBD_CONF_ORDER`</sup>
 
 ### Build Plugin from Repo Source
 
@@ -101,7 +107,8 @@ docker plugin set ajanis/rbd:v19.2 RBD_CONF_POOL="rbd.swarm" RBD_CONF_KEYRING_US
 
 In addition to the **Optional** `size` (_Default: 200M_) and `fstype` (_Default: XFS_) options, the volume filesystem can be customized by passing options to mkfs with `mkfs_options` (_No Default_).
 
-Filesystem osptions **MUST** be supported by the underlying filesystem utility, e.g.: `mkfs.ext4`, `mkfs.xfs` but should be passed as a string of options as if using the generic `mkfs` command's `fs-options` argument:
+
+**IMPORTANT** : Filesystem options **MUST** be supported by the underlying filesystem utility, e.g.: `mkfs.ext4`, `mkfs.xfs` but should be passed as a string of options as if using the generic `mkfs` command's `fs-options` argument:
 
 *mkfs -t [fstype] [size] fs-options* **[custom mkfs options]**
 
