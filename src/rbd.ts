@@ -5,7 +5,7 @@ import fs from "fs";
 
 export default class Rbd {
     // ToDo: Actually used the passed in options for cluster and user
-    constructor(readonly options: { pool: string, cluster: string, user: string, map_options: string[] }) { }
+    constructor(readonly options: { pool: string, cluster: string, user: string, map_options: string[], order: bigint, rbd_options: string }) { }
 
     async isMapped(name: string): Promise<string> {
         let mapped: any[];
@@ -78,9 +78,10 @@ export default class Rbd {
         return rbdList.find(i => i.image === name);
     }
 
-    async create(name: string, size: string): Promise<void> {
+    async create(name: string, size: string ): Promise<void> {
         try {
-            const { stdout, stderr } = await execFile("rbd", ["create", "--pool", this.options.pool, name, "--size", size], { timeout: 30000 });
+            const extraRbdArgs = this.options.rbd_options? ["--image-feature", ...this.options.rbd_options] : []
+            const { stdout, stderr } = await execFile("rbd", ["create", "--order", this.options.order, "--pool", this.options.pool, name, "--size", size, ...extraRbdArgs], { timeout: 30000 });
             if (stderr) console.log(stderr);
             if (stdout) console.log(stdout);
         }
