@@ -36,6 +36,9 @@ done
 
 # Log setup
 logfile="plugin_build_$(date +%Y%m%d_%H%M%S).log"
+if [[ ! -d rootfs ]]; then
+rm -rf rootfs
+fi
 
 # Redirect all output to log and console
 exec > >(tee -a "$logfile") 2>&1

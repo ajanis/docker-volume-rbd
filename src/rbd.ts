@@ -80,8 +80,8 @@ export default class Rbd {
 
     async create(name: string, size: string ): Promise<void> {
         try {
-            const extraRbdArgs = this.options.rbd_options? ["--image-feature", ...this.options.rbd_options] : []
-            const { stdout, stderr } = await execFile("rbd", ["create", "--order", this.options.order, "--pool", this.options.pool, name, "--size", size, ...extraRbdArgs], { timeout: 30000 });
+            const extraRbdArgs = this.options.rbd_options? ["--image-feature", this.options.rbd_options] : []
+            const { stdout, stderr } = await execFile("rbd", ["create", "--order", this.options.order, "--pool", this.options.pool, "--size", size, ...extraRbdArgs, name], { timeout: 30000 });
             if (stderr) console.log(stderr);
             if (stdout) console.log(stdout);
         }
