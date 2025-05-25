@@ -18,6 +18,14 @@
         {
             "name": "RBD_CONF_MAP_OPTIONS",
             "settable": ["value"]
+        },
+        {
+            "name": "RBD_CONF_RBD_OPTIONS",
+            "settable": ["value"]
+        },
+        {
+            "name": "RBD_CONF_ORDER",
+            "settable": ["value"]
         }
     ],
     "network": {
