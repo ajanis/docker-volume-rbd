@@ -5,7 +5,7 @@ import fs from "fs";
 
 export default class Rbd {
     // ToDo: Actually used the passed in options for cluster and user
-    constructor(readonly options: { pool: string, cluster: string, user: string, map_options: string[], order: bigint, rbd_options: string }) { }
+    constructor(readonly options: { pool: string, cluster: string, user: string, map_options: string[], order: string, rbd_options: string }) { }
 
     async isMapped(name: string): Promise<string> {
         let mapped: any[];
