@@ -1,6 +1,6 @@
 import express from "express";
 import process from "process";
-
+import fs from "fs/promises";
 import Rbd from "./rbd";
 import MountPointEntry from "./mountPointEntry";
 
@@ -185,11 +185,19 @@ app.post("/VolumeDriver.Unmount", async (request, response) => {
 
     try {
         await rbd.unmount(mountPoint);
-        mountPointTable.delete(mountPoint);
         await rbd.unMap(req.Name);
+        // Check if mountPoint exists still
+        const stat = await fs.stat(mountPoint);
+        if (stat.isDirectory()) {
+            // If exists, delete the directory
+            await fs.rmdir(mountPoint)
+        }
     }
     catch (error) {
         return response.json({ Err: error.message });
+    }
+    finally {
+        mountPointTable.delete(mountPoint);
     }
 
     response.json({
