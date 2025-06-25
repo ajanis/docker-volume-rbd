@@ -1,7 +1,8 @@
 import util from 'util';
+import {join as pathJoin} from 'path';
 import child_process from "child_process";
 const execFile = util.promisify(child_process.execFile);
-import fs from "fs";
+import fs from "fs/promises";
 
 export default class Rbd {
     // ToDo: Actually used the passed in options for cluster and user
@@ -116,8 +117,22 @@ export default class Rbd {
         }
     }
 
+    async doesPropagatedRootExist(volumeName: string, callerId: string): Promise<boolean> {
+        const propagatedRoot = pathJoin('/var/lib/docker/plugins', callerId, 'propagated-mount/rbd', volumeName);
+        try {
+            const stat = await fs.stat(propagatedRoot);
+            if (stat.isDirectory() || stat.isFile()) {
+                return true;
+            }
+            return false;
+        } catch(error) {
+            console.error(error);
+            throw new Error(`unable to stat ${volumeName} propagated mount at ${propagatedRoot}: ${error.message}`);
+        }
+    }
+
     async mount(device: string, mountPoint: string): Promise<void> {
-        fs.mkdirSync(mountPoint, { recursive: true });
+        await fs.mkdir(mountPoint, { recursive: true });
 
         try {
             const { stdout, stderr } = await execFile("mount", [device, mountPoint], { timeout: 30000 });
@@ -141,6 +156,6 @@ export default class Rbd {
             throw new Error(`umount command failed with code ${error.code}: ${error.message}`);
         }
 
-        fs.rmdirSync(mountPoint);
+        await fs.rmdir(mountPoint);
     }
 }
