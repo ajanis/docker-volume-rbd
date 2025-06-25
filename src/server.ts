@@ -118,6 +118,17 @@ app.post("/VolumeDriver.Mount", async (request, response) => {
         return response.json({ Err: error.message });
     }
 
+    try {
+        if (rbd.doesPropagatedRootExist(req.Name, req.ID)) {
+            return response.json({
+                Err: "Propagated mount path already exists, remove the path locally to continue."
+            });
+        }
+    }
+    catch (error) {
+        return response.json({ Err: error.message });
+    }
+
     mountPointTable.set(mountPoint, 
         new MountPointEntry( 
             req.Name, 
