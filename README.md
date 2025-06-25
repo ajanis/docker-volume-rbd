@@ -99,7 +99,7 @@ All available options are:
 If you install with the build script or if you need to change the default volume options after install, then you can configure them using `docker plugin set`
 
 ```bash
-docker plugin set ajanis/rbd:v19.2 RBD_CONF_POOL="rbd.swarm" RBD_CONF_KEYRING_USER="swarm" RBD_CONF_CLUSTER="ceph" RBD_CONF_MAP_OPTIONS='--exclusive;w--options=noshare'
+docker plugin set ajanis/rbd:v19.2 RBD_CONF_POOL="rbd.swarm" RBD_CONF_KEYRING_USER="swarm" RBD_CONF_CLUSTER="ceph" RBD_CONF_MAP_OPTIONS='--exclusive;--options=noshare'
 ```
 
 
