@@ -64,6 +64,9 @@ All available options are:
 - `RBD_CONF_ORDER`
   - default: `"22"`
   - Block size defined as `2`<sup>`RBD_CONF_ORDER`</sup>
+- `RBD_CONF_WATCHER_WAIT`
+  - default: `"45"`
+  - Seconds a mount waits for another host's watchers on the image to clear before failing. Watchers from a crashed host linger for ~30s until Ceph times them out; a cleanly unmapped image has none.
 
 ### Build Plugin from Repo Source
 

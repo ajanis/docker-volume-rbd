@@ -10,6 +10,7 @@ const user = process.env.RBD_CONF_KEYRING_USER || "swarm"; // ToDo: Not utilized
 const order = process.env.RBD_CONF_ORDER || "22"
 const rbd_options = process.env.RBD_CONF_RBD_OPTIONS || "layering,exclusive-lock,object-map,fast-diff,deep-flatten";
 const map_options = process.env.RBD_CONF_MAP_OPTIONS ? process.env.RBD_CONF_MAP_OPTIONS.split(';') : ["--exclusive"]; // default to an exclusive lock when mapping to prevent multiple containers attempting to mount the block device
+const watcher_wait = Number(process.env.RBD_CONF_WATCHER_WAIT || "45"); // seconds to wait for another host's watchers to clear before failing a mount
 const rbd = new Rbd({ pool: pool, cluster: cluster, user: user, map_options: map_options, order: order, rbd_options: rbd_options});
 const referenceTable = new ReferenceTable();
 
@@ -25,6 +26,23 @@ app.post("/Plugin.Activate", (request, response) => {
         "Implements": ["VolumeDriver"]
     });
 });
+
+// Express 4 does not catch rejected promises from async handlers; an escaped error would
+// crash the plugin (losing the reference table), so report it to Docker instead.
+function handle(fn: (request: express.Request, response: express.Response) => Promise<unknown>) {
+    return async (request: express.Request, response: express.Response) => {
+        try {
+            await fn(request, response);
+        }
+        catch (error) {
+            const errMsg = (error instanceof Error) ? error.message : String(error);
+            console.error(errMsg);
+            if (!response.headersSent) {
+                response.json({ Err: errMsg });
+            }
+        }
+    };
+}
 
 function getMountPoint(name: string): string {
     return `/mnt/volumes/${pool}/${name}`;
@@ -94,13 +112,15 @@ app.post("/VolumeDriver.Remove", async (request, response) => {
     than once, the plugin may need to keep track of each new mount request and provision 
     at the first mount request and deprovision at the last corresponding unmount request.
 */
-app.post("/VolumeDriver.Mount", async (request, response) => {
+app.post("/VolumeDriver.Mount", handle(async (request, response) => {
     const req = request.body as { Name: string, ID: string };
     const mountPoint = getMountPoint(req.Name);
 
     console.log(`Mounting rbd volume ${req.Name}`);
 
-    if (await rbd.isMounted(mountPoint)) {
+    const state = await rbd.getMountState(req.Name, mountPoint);
+
+    if (state === "healthy") {
         console.log(`${mountPoint} is already mounted`);
         referenceTable.add(req.Name, req.ID);
         return response.json({
@@ -109,33 +129,37 @@ app.post("/VolumeDriver.Mount", async (request, response) => {
         });
     }
 
-    try {
-        let device = await rbd.isMapped(req.Name);
-
-        if (!device) {
-            device = await rbd.map(req.Name);
-        }
-
-        if (!await rbd.isMounted(mountPoint)) {
-            await rbd.mount(device, mountPoint);
-        }
-        referenceTable.add(req.Name, req.ID);
+    if (state === "stale") {
+        // Mounted, but not from this image's current mapping (e.g. the device was unmapped underneath us)
+        console.log(`${mountPoint} is a stale mount; lazily unmounting before remounting`);
+        await rbd.unmount(mountPoint, true, true);
     }
-    catch (error) {
-        const errMsg = (error instanceof Error) ? error.message : String(error);
-        return response.json({ Err: errMsg });
+
+    let device = await rbd.isMapped(req.Name);
+
+    if (!device) {
+        // Not mapped on this host; refuse if another host is still watching the image
+        const watchers = await rbd.waitForNoWatchers(req.Name, watcher_wait * 1000);
+        if (watchers.length > 0) {
+            const addresses = watchers.map(w => w.address).join(", ");
+            throw new Error(`rbd volume ${req.Name} is in use on another host (watchers: ${addresses})`);
+        }
+        device = await rbd.map(req.Name);
     }
-    
+
+    await rbd.mount(device, mountPoint);
+    referenceTable.add(req.Name, req.ID);
+
     response.json({
         MountPoint: mountPoint,
         Err: ""
     });
-});
+}));
 
 /*
     Request the path to the volume with the given volume_name.
 */
-app.post("/VolumeDriver.Path", async (request, response) => {
+app.post("/VolumeDriver.Path", handle(async (request, response) => {
     const req = request.body as { Name: string };
     const mountPoint = getMountPoint(req.Name);
 
@@ -147,7 +171,7 @@ app.post("/VolumeDriver.Path", async (request, response) => {
         });
     }
     response.json({ Err: `Volume ${req.Name} is not mounted` });
-});
+}));
 
 /*
     Docker is no longer using the named volume. Unmount is called once per container stop. 
@@ -155,7 +179,7 @@ app.post("/VolumeDriver.Path", async (request, response) => {
 
     ID is a unique ID for the caller that is requesting the mount.
 */
-app.post("/VolumeDriver.Unmount", async (request, response) => {
+app.post("/VolumeDriver.Unmount", handle(async (request, response) => {
     const req = request.body as { Name: string, ID: string };
     const mountPoint = getMountPoint(req.Name);
 
@@ -169,33 +193,22 @@ app.post("/VolumeDriver.Unmount", async (request, response) => {
     }
 
     if (!removal.removed) {
-        console.log(`Unmount requested for ${req.Name} with unknown ID ${req.ID}; skipping teardown to avoid disrupting other consumers`);
-        return response.json({ Err: "" });
+        // The reference table is in memory, so it is empty after a plugin restart. With no other known
+        // consumers, tear down anyway: a mapping still in use elsewhere fails to unmap as busy.
+        console.log(`Unmount requested for ${req.Name} with unknown ID ${req.ID} and no tracked consumers; attempting teardown`);
     }
 
     if (await rbd.isMounted(mountPoint)) {
-        try {
-            await rbd.unmount(mountPoint);
-        }
-        catch (error) {
-            const errMsg = (error instanceof Error) ? error.message : String(error);
-            return response.json({ Err: errMsg });
-        }
+        await rbd.unmount(mountPoint);
     }
     if (await rbd.isMapped(req.Name)) {
-        try {
-            await rbd.unMap(req.Name);
-        }
-        catch (error) {
-            const errMsg = (error instanceof Error) ? error.message : String(error);
-            return response.json({ Err: errMsg });
-        }
+        await rbd.unMap(req.Name);
     }
 
     response.json({
         Err: ""
     });
-});
+}));
 
 /*
     Get info about volume_name.

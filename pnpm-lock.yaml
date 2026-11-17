@@ -21,6 +21,9 @@ importers:
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
+      '@types/node':
+        specifier: ^22.15.19
+        version: 22.15.19
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.15.19)(ts-node@10.9.2(@types/node@22.15.19)(typescript@5.9.3))

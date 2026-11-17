@@ -40,6 +40,12 @@
       "settable": [
         "value"
       ]
+    },
+    {
+      "name": "RBD_CONF_WATCHER_WAIT",
+      "settable": [
+        "value"
+      ]
     }
   ],
   "network": {
