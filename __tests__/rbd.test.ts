@@ -153,26 +153,47 @@ describe('Rbd command helpers', () => {
   test('getMountState is healthy when mounted from the current mapping', async () => {
     const { Rbd } = await loadRbdWithMock([mapped('vol1', '/dev/rbd0')], [mountLine('/dev/rbd0', '/mnt/volumes/rbd/vol1')]);
     const rbd = new Rbd(baseOptions);
-    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toBe('healthy');
+    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toEqual({ state: 'healthy', device: '/dev/rbd0' });
   });
 
   test('getMountState is stale when the image is no longer mapped', async () => {
     const { Rbd } = await loadRbdWithMock([notMapped], [mountLine('/dev/rbd0', '/mnt/volumes/rbd/vol1')]);
     const rbd = new Rbd(baseOptions);
-    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toBe('stale');
+    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toEqual({ state: 'stale', device: null });
   });
 
   test('getMountState is stale when mounted from a different device', async () => {
     const { Rbd } = await loadRbdWithMock([mapped('vol1', '/dev/rbd3')], [mountLine('/dev/rbd0', '/mnt/volumes/rbd/vol1')]);
     const rbd = new Rbd(baseOptions);
-    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toBe('stale');
+    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toEqual({ state: 'stale', device: '/dev/rbd3' });
   });
 
-  test('getMountState is unmounted without checking the mapping', async () => {
-    const { Rbd, execMock } = await loadRbdWithMock([], ['']);
+  test('getMountState is unmounted and still reports the mapping', async () => {
+    const { Rbd, execMock } = await loadRbdWithMock([mapped('vol1', '/dev/rbd0')], ['']);
     const rbd = new Rbd(baseOptions);
-    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toBe('unmounted');
-    expect(execMock).not.toHaveBeenCalled();
+    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toEqual({ state: 'unmounted', device: '/dev/rbd0' });
+    expect(execMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('getMountState stays healthy when a snapshot of the image is mapped first', async () => {
+    const showmapped = {
+      stdout: JSON.stringify([
+        { id: '0', pool: 'rbd', namespace: '', name: 'vol1', snap: 'backup', device: '/dev/rbd0' },
+        { id: '1', pool: 'rbd', namespace: 'other', name: 'vol1', snap: '-', device: '/dev/rbd1' },
+        { id: '2', pool: 'rbd', namespace: '', name: 'vol1', snap: '-', device: '/dev/rbd2' },
+      ]),
+    };
+    const { Rbd } = await loadRbdWithMock([showmapped], [mountLine('/dev/rbd2', '/mnt/volumes/rbd/vol1')]);
+    const rbd = new Rbd(baseOptions);
+    expect(await rbd.getMountState('vol1', '/mnt/volumes/rbd/vol1')).toEqual({ state: 'healthy', device: '/dev/rbd2' });
+  });
+
+  test('isMapped ignores a mapped snapshot of the image', async () => {
+    const { Rbd } = await loadRbdWithMock([{
+      stdout: JSON.stringify([{ id: '0', pool: 'rbd', namespace: '', name: 'vol1', snap: 'backup', device: '/dev/rbd0' }]),
+    }]);
+    const rbd = new Rbd(baseOptions);
+    expect(await rbd.isMapped('vol1')).toBeNull();
   });
 
   test('unmount passes --lazy when requested', async () => {

@@ -92,7 +92,10 @@ export default class Rbd {
                 throw new Error(`rbd showmapped output validation failed: ${JSON.stringify(mappedResult.errors)}`);
             }
 
-            const entry = mappedResult.data.find(i => i.pool === this.options.pool && i.name === name);
+            // Only the image head in the default namespace; a mapped snapshot or a same-named
+            // image in another namespace is a different device
+            const entry = mappedResult.data.find(i =>
+                i.pool === this.options.pool && i.name === name && i.snap === "-" && i.namespace === "");
 
             if (!entry) {
                 return null;
@@ -380,16 +383,17 @@ export default class Rbd {
 
     // A mount is healthy only if it is backed by the device this image is currently mapped to;
     // otherwise it is left over from a device that was unmapped (e.g. force-unmapped) underneath us.
-    async getMountState(name: string, mountPoint: string): Promise<MountState> {
+    // Also returns the image's current mapping so callers don't need to query it again.
+    async getMountState(name: string, mountPoint: string): Promise<{ state: MountState, device: string | null }> {
         const source = await this.getMountSource(mountPoint);
-        if (source === null) {
-            return "unmounted";
-        }
         const device = await this.isMapped(name);
-        if (device && await resolveDevice(device) === await resolveDevice(source)) {
-            return "healthy";
+        if (source === null) {
+            return { state: "unmounted", device };
         }
-        return "stale";
+        if (device && await resolveDevice(device) === await resolveDevice(source)) {
+            return { state: "healthy", device };
+        }
+        return { state: "stale", device };
     }
 
     async mount(device: string, mountPoint: string): Promise<void> {
